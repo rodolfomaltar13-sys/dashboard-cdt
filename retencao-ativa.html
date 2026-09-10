@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retenção Ativa · Desfiliados fora do processo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg: #F5F6F4;
+    --panel: #FFFFFF;
+    --line: #E2E5E1;
+    --ink: #16211C;
+    --ink-soft: #5B675F;
+    --ink-faint: #8C978F;
+    --teal-deep: #00543F;
+    --teal: #007A5A;
+    --teal-bright: #00A078;
+    --lime: #A0F000;
+    --lime-ink: #294600;
+
+    --st-pendente: #64748B;
+    --st-tentativa: #B7791F;
+    --st-realizado: #2563AC;
+    --st-negociacao: #7C5CBF;
+    --st-revertido: #1F8F5E;
+    --st-naorevertido: #B3261E;
+    --st-semcontato: #93524B;
+
+    --radius: 8px;
+    --shadow: 0 1px 2px rgba(22,33,28,0.06), 0 8px 24px -12px rgba(22,33,28,0.18);
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono{ font-family: 'IBM Plex Mono', 'SF Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+  button{ font-family: inherit; }
+  input, select, textarea{ font-family: inherit; }
+
+  a{ color: var(--teal); }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    background: var(--teal-deep);
+    color: #EAF5EF;
+    padding: 18px 28px;
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .brand{ display:flex; align-items:center; gap:14px; }
+  .brand-mark{
+    width:38px; height:38px; border-radius: 10px;
+    background: linear-gradient(160deg, var(--teal-bright), var(--teal-deep) 130%);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:15px; color:#fff; flex-shrink:0;
+    border: 1px solid rgba(255,255,255,0.18);
+  }
+  .brand h1{ margin:0; font-size: 17px; font-weight: 700; letter-spacing: 0.1px; }
+  .brand p{ margin: 2px 0 0; font-size: 13px; color: #B9E1CD; font-weight: 500; }
+
+  .topbar-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .meta-line{ font-size: 12.5px; color:#BFE3D2; text-align:right; line-height:1.5; }
+
+  .btn{
+    border:none; border-radius: var(--radius);
+    padding: 9px 16px; font-size: 13.5px; font-weight: 700;
+    cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+    transition: transform .06s ease, background .15s ease, box-shadow .15s ease;
+    white-space: nowrap;
+  }
+  .btn:active{ transform: translateY(1px); }
+  .btn-primary{ background: var(--lime); color: var(--lime-ink); }
+  .btn-primary:hover{ background:#B3FF12; }
+  .btn-ghost{ background: rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.25); }
+  .btn-ghost:hover{ background: rgba(255,255,255,0.18); }
+  .btn-line{ background:transparent; color: var(--teal); border:1px solid var(--line); }
+  .btn-line:hover{ border-color: var(--teal); background:#F0FAF6; }
+  .btn-danger-line{ background:transparent; color:#8A2E22; border:1px solid #E7C9C2; }
+  .btn-danger-line:hover{ background:#FBF0EE; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+  #file-input{ display:none; }
+
+  /* ---------- Layout ---------- */
+  .page{ max-width: 1180px; margin: 0 auto; padding: 22px 28px 60px; }
+
+  .stats{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .stat{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--stat-color, var(--teal));
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .stat .num{ font-size: 26px; font-weight: 800; line-height:1; font-family:'IBM Plex Mono', monospace; }
+  .stat .label{ margin-top:6px; font-size: 12.5px; color: var(--ink-soft); font-weight:600; }
+
+  /* ---------- Filters ---------- */
+  .toolbar{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+  .tabs{
+    display:flex; gap: 4px; border-bottom: 1px solid var(--line);
+    margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .tab{
+    background:none; border:none; cursor:pointer;
+    padding: 8px 4px; margin-right: 18px;
+    font-size: 13.5px; font-weight: 700; color: var(--ink-faint);
+    border-bottom: 2px solid transparent;
+    display:flex; align-items:center; gap:7px;
+  }
+  .tab .count{
+    font-size: 11.5px; font-family:'IBM Plex Mono',monospace; font-weight:600;
+    background:#EEF1EE; color:var(--ink-soft); padding: 1px 6px; border-radius: 999px;
+  }
+  .tab.active{ color: var(--teal-deep); border-bottom-color: var(--teal); }
+  .tab.active .count{ background:#DFF3EA; color: var(--teal-deep); }
+
+  .filters-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size: 11.5px; font-weight:700; color: var(--ink-soft); }
+  .field input, .field select{
+    border:1px solid var(--line); border-radius:7px; padding: 8px 10px;
+    font-size: 13.5px; color: var(--ink); background:#fff; min-width: 150px;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{
+    outline: 2px solid var(--teal-bright); outline-offset: 1px; border-color: var(--teal-bright);
+  }
+  .field.search{ min-width: 220px; flex: 1 1 220px; }
+  .field.dates{ flex-direction: row; gap:6px; align-items:flex-end; }
+  .field.dates input{ min-width: 128px; }
+  .clear-filters{
+    background:none; border:none; color: var(--teal); font-size:12.5px; font-weight:700;
+    cursor:pointer; padding: 8px 4px; text-decoration: underline; text-underline-offset:2px;
+  }
+
+  /* ---------- List ---------- */
+  .list{ display:flex; flex-direction:column; gap:8px; }
+  .row{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--row-color, var(--st-pendente));
+    border-radius: 8px;
+    padding: 13px 16px;
+    display:grid;
+    grid-template-columns: 150px 1fr auto auto;
+    align-items:center;
+    gap: 16px;
+    cursor:pointer;
+    transition: box-shadow .12s ease, border-color .12s ease;
+  }
+  .row:hover{ box-shadow: var(--shadow); }
+  .row:focus-visible{ outline: 2px solid var(--teal-bright); outline-offset: 2px; }
+  .row .matricula{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size: 14.5px; }
+  .row .matricula small{ display:block; font-family:'Manrope',sans-serif; font-weight:600; color: var(--ink-faint); font-size:11px; margin-top:2px; }
+  .row .info{ display:flex; flex-wrap:wrap; gap: 4px 18px; font-size:12.5px; color: var(--ink-soft); }
+  .row .info b{ color: var(--ink); font-weight:700; }
+  .row .badge{
+    font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+    color: #fff; background: var(--row-color, var(--st-pendente)); white-space:nowrap;
+  }
+  .row .attendant{
+    font-size: 12px; color: var(--ink-soft); font-weight:600; text-align:right; min-width:110px;
+  }
+  .row .attendant .none{ color: var(--ink-faint); font-style: normal; font-weight:500; }
+  .row .chev{ color: var(--ink-faint); font-size:16px; }
+
+  .empty{
+    background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius);
+    padding: 54px 30px; text-align:center; color: var(--ink-soft);
+  }
+  .empty h3{ margin:0 0 8px; color: var(--ink); font-size:17px; }
+  .empty p{ margin:0 auto 18px; max-width: 420px; font-size: 13.5px; line-height:1.6; }
+
+  .no-results{
+    text-align:center; padding: 30px; color: var(--ink-faint); font-size: 13.5px;
+  }
+
+  /* ---------- Drawer ---------- */
+  .overlay{
+    position:fixed; inset:0; background: rgba(15,23,19,0.38);
+    opacity:0; pointer-events:none; transition: opacity .18s ease; z-index: 50;
+  }
+  .overlay.open{ opacity:1; pointer-events:all; }
+
+  .drawer{
+    position:fixed; top:0; right:0; height:100%; width: 460px; max-width: 92vw;
+    background: var(--panel); z-index: 60; box-shadow: -18px 0 40px -20px rgba(0,0,0,0.35);
+    transform: translateX(100%); transition: transform .2s ease;
+    display:flex; flex-direction:column;
+  }
+  .drawer.open{ transform: translateX(0); }
+  .drawer-head{
+    padding: 18px 20px; border-bottom: 1px solid var(--line);
+    display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+  }
+  .drawer-head .matricula{ font-family:'IBM Plex Mono',monospace; font-size:19px; font-weight:800; }
+  .drawer-head .sub{ margin-top:4px; font-size:12.5px; color: var(--ink-soft); }
+  .drawer-close{
+    background:none; border:none; font-size:20px; color: var(--ink-faint); cursor:pointer;
+    line-height:1; padding:4px;
+  }
+  .drawer-close:hover{ color: var(--ink); }
+  .drawer-body{ flex:1; overflow-y:auto; padding: 18px 20px 30px; }
+
+  .section-title{
+    font-size: 12px; font-weight:800; color: var(--teal-deep); text-transform: none;
+    margin: 0 0 10px; padding-bottom:8px; border-bottom: 1px solid var(--line);
+  }
+  .kv{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-bottom: 22px; }
+  .kv .item span{ display:block; }
+  .kv .item .k{ font-size:11px; color: var(--ink-faint); font-weight:700; margin-bottom:2px; }
+  .kv .item .v{ font-size: 13.5px; color: var(--ink); font-weight:600; }
+  .kv .item .v.mono{ font-family:'IBM Plex Mono',monospace; }
+
+  details.qa{ margin-bottom: 22px; }
+  details.qa summary{ cursor:pointer; font-size:12.5px; font-weight:700; color: var(--ink-soft); padding: 6px 0; }
+  .qa-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:8px 14px; margin-top:8px; }
+  .qa-grid .item{ font-size:12.5px; display:flex; justify-content:space-between; gap:8px; border-bottom: 1px dotted var(--line); padding:4px 0; }
+  .qa-grid .item .flag{ font-weight:700; }
+  .qa-grid .item .flag.sim{ color: var(--st-revertido); }
+  .qa-grid .item .flag.nao{ color: var(--st-naorevertido); }
+
+  .form-grid{ display:flex; flex-direction:column; gap:14px; }
+  .form-row{ display:flex; gap:12px; }
+  .form-row .field{ flex:1; }
+  .form-grid .field label{ font-size:12px; }
+  .form-grid input, .form-grid select, .form-grid textarea{
+    width:100%; border:1px solid var(--line); border-radius:7px; padding:9px 10px; font-size:13.5px; color:var(--ink);
+  }
+  .form-grid textarea{ resize: vertical; min-height: 70px; }
+  .qtd-row{ display:flex; gap:8px; align-items:center; }
+  .qtd-row input{ width:64px; text-align:center; font-weight:700; }
+  .btn-step{
+    border:1px solid var(--line); background:#fff; width:30px; height:34px; border-radius:7px;
+    font-size:16px; font-weight:700; cursor:pointer; color:var(--teal-deep);
+  }
+  .btn-step:hover{ background:#F0FAF6; border-color: var(--teal-bright); }
+  .attempt-btn{
+    margin-top:2px; align-self:flex-start; background:#F0FAF6; border:1px solid #BFE3D2; color: var(--teal-deep);
+    padding:7px 12px; border-radius:7px; font-size:12.5px; font-weight:700; cursor:pointer;
+  }
+  .attempt-btn:hover{ background:#DFF3EA; }
+
+  .log-list{ margin-top:10px; display:flex; flex-direction:column; gap:6px; max-height:120px; overflow-y:auto; }
+  .log-item{ font-size:12px; color: var(--ink-soft); display:flex; gap:8px; }
+  .log-item .dot{ width:5px; height:5px; border-radius:50%; background: var(--teal-bright); margin-top:6px; flex-shrink:0; }
+
+  .drawer-footer{
+    padding: 14px 20px; border-top:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .save-state{ font-size:12px; color: var(--ink-faint); }
+  .save-state.saved{ color: var(--st-revertido); font-weight:600; }
+
+  /* ---------- Toast ---------- */
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform: translateX(-50%) translateY(12px);
+    background: var(--teal-deep); color:#fff; padding: 11px 18px; border-radius:8px;
+    font-size:13px; font-weight:600; box-shadow: var(--shadow); z-index:80;
+    opacity:0; pointer-events:none; transition: all .2s ease;
+  }
+  .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 760px){
+    .topbar{ padding:16px; }
+    .page{ padding: 16px 14px 50px; }
+    .stats{ grid-template-columns: repeat(2,1fr); }
+    .row{ grid-template-columns: 1fr; gap:8px; }
+    .row .attendant{ text-align:left; }
+    .row .chev{ display:none; }
+    .drawer{ width:100%; max-width:100%; }
+    .kv{ grid-template-columns: 1fr; }
+    .form-row{ flex-direction:column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">CDT</div>
+    <div>
+      <h1>Retenção Ativa</h1>
+      <p>Desfiliados fora do processo &mdash; carteira de trabalho</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <div class="meta-line" id="meta-line">Nenhuma planilha importada ainda</div>
+    <button class="btn btn-line" id="btn-export">Exportar CSV</button>
+    <button class="btn btn-ghost" id="btn-import-trigger">Importar planilha</button>
+    <input type="file" id="file-input" accept=".xlsx,.xls">
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="stats" id="stats"></div>
+
+  <div class="toolbar">
+    <div class="tabs" id="tabs"></div>
+    <div class="filters-row">
+      <div class="field search">
+        <label for="f-search">Buscar matrícula</label>
+        <input type="text" id="f-search" placeholder="Ex.: MS400013417">
+      </div>
+      <div class="field">
+        <label for="f-status">Status</label>
+        <select id="f-status"><option value="all">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="f-atendente">Atendente</label>
+        <select id="f-atendente"><option value="all">Todos</option></select>
+      </div>
+      <div class="field dates">
+        <div class="field">
+          <label for="f-date-from">Desfiliação de</label>
+          <input type="date" id="f-date-from">
+        </div>
+        <div class="field">
+          <label for="f-date-to">até</label>
+          <input type="date" id="f-date-to">
+        </div>
+      </div>
+      <button class="clear-filters" id="btn-clear-filters">Limpar filtros</button>
+    </div>
+  </div>
+
+  <div class="list" id="list"></div>
+
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="drawer" role="dialog" aria-label="Detalhes da matrícula">
+  <div class="drawer-head">
+    <div>
+      <div class="matricula" id="d-matricula">—</div>
+      <div class="sub" id="d-sub">—</div>
+    </div>
+    <button class="drawer-close" id="drawer-close" aria-label="Fechar">&times;</button>
+  </div>
+  <div class="drawer-body">
+    <div class="section-title">Dados da desfiliação</div>
+    <div class="kv" id="d-kv"></div>
+
+    <details class="qa">
+      <summary>Detalhes de auditoria do ticket</summary>
+      <div class="qa-grid" id="d-qa"></div>
+    </details>
+
+    <div class="section-title">Tratativa da retenção</div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="t-status">Status</label>
+        <select id="t-status"></select>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="t-atendente">Atendente responsável</label>
+          <input type="text" id="t-atendente" list="atendentes-list" placeholder="Nome do atendente">
+          <datalist id="atendentes-list"></datalist>
+        </div>
+        <div class="field">
+          <label for="t-data-tentativa">Data da tentativa</label>
+          <input type="date" id="t-data-tentativa">
+        </div>
+      </div>
+      <div class="field">
+        <label for="t-qtd">Quantidade de tentativas</label>
+        <div class="qtd-row">
+          <button class="btn-step" id="qtd-minus" type="button" aria-label="Diminuir">&minus;</button>
+          <input type="number" id="t-qtd" min="0" value="0">
+          <button class="btn-step" id="qtd-plus" type="button" aria-label="Aumentar">+</button>
+          <button class="attempt-btn" id="btn-log-attempt" type="button">Registrar tentativa de hoje</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="t-resultado">Resultado do contato</label>
+        <input type="text" id="t-resultado" placeholder="Ex.: cliente vai retornar, número inválido...">
+      </div>
+      <div class="field">
+        <label for="t-obs">Observação</label>
+        <textarea id="t-obs" placeholder="Anotações internas sobre o atendimento"></textarea>
+      </div>
+
+      <div id="d-log-wrap" style="display:none;">
+        <div class="field"><label>Histórico de tentativas</label></div>
+        <div class="log-list" id="d-log"></div>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <span class="save-state" id="save-state">&nbsp;</span>
+    <button class="btn btn-primary" id="btn-save">Salvar tratativa</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= Storage layer =================
+     Usa window.storage (persistência do artifact) quando disponível;
+     cai para localStorage quando a página é aberta fora do Claude
+     (arquivo baixado, hospedado em outro lugar etc.). */
+  const HAS_ARTIFACT_STORAGE = (typeof window.storage !== 'undefined' && window.storage !== null);
+  const Storage = {
+    async get(key){
+      if (HAS_ARTIFACT_STORAGE){
+        try{ const r = await window.storage.get(key, false); return r ? r.value : null; }
+        catch(e){ return null; }
+      }
+      try{ return window.localStorage.getItem(key); } catch(e){ return null; }
+    },
+    async set(key, value){
+      if (HAS_ARTIFACT_STORAGE){
+        try{ await window.storage.set(key, value, false); return true; }
+        catch(e){ console.error('storage.set falhou', e); return false; }
+      }
+      try{ window.localStorage.setItem(key, value); return true; } catch(e){ return false; }
+    }
+  };
+
+  const STORAGE_KEY = 'retencao_ativa_desfiliados_v1';
+
+  /* ================= Status config ================= */
+  const STATUSES = [
+    { key:'pendente',        label:'Pendente',                  color:'var(--st-pendente)',   bucket:'pendente' },
+    { key:'em_tentativa',    label:'Em tentativa de contato',    color:'var(--st-tentativa)',  bucket:'andamento' },
+    { key:'contato_realizado', label:'Contato realizado',        color:'var(--st-realizado)',  bucket:'andamento' },
+    { key:'em_negociacao',   label:'Em negociação',              color:'var(--st-negociacao)', bucket:'andamento' },
+    { key:'sem_contato',     label:'Sem contato',                color:'var(--st-semcontato)', bucket:'andamento' },
+    { key:'revertido',       label:'Revertido',                  color:'var(--st-revertido)',  bucket:'finalizado' },
+    { key:'nao_revertido',   label:'Não revertido',              color:'var(--st-naorevertido)', bucket:'finalizado' },
+  ];
+  const STATUS_BY_KEY = Object.fromEntries(STATUSES.map(s => [s.key, s]));
+
+  const TABS = [
+    { key:'todos',     label:'Todos' },
+    { key:'pendente',  label:'Não trabalhadas' },
+    { key:'andamento', label:'Em andamento' },
+    { key:'finalizado',label:'Finalizadas' },
+  ];
+
+  const QA_FIELDS = [
+    ['ticketCriado','Ticket criado'],
+    ['ticketConsistente','Ticket consistente'],
+    ['matriculaExistente','Matrícula existente'],
+    ['franquiaCorreta','Franquia correta'],
+    ['ticketFechado2Dias','Fechado em até 2 dias'],
+    ['ticketCriadoAntesDesfiliacao','Ticket antes da desfiliação'],
+    ['fechadoStatusCorreto','Fechado com status correto'],
+    ['simulacaoCalculadora','Simulação calculadora'],
+  ];
+
+  const HEADER_MAP = {
+    'regional':'regional',
+    'franquia':'franquia',
+    'idticket':'idTicket',
+    'matricula':'matricula',
+    'tipo de pedido':'tipoPedido',
+    'tipo de desfiliacao':'tipoDesfiliacao',
+    'ticket criado':'ticketCriado',
+    'ticket consistente':'ticketConsistente',
+    'matricula existente':'matriculaExistente',
+    'franquia correta':'franquiaCorreta',
+    'ticket fechado em ate 2 dias (caso desfiliado)':'ticketFechado2Dias',
+    'ticket criado antes da desfiliacao':'ticketCriadoAntesDesfiliacao',
+    'fechado com status correto':'fechadoStatusCorreto',
+    'data da criacao':'dataCriacao',
+    'data da finalizacao':'dataFinalizacao',
+    'data da desfiliacao':'dataDesfiliacao',
+    'simulacao calculadora':'simulacaoCalculadora',
+    'atendente - calculadora':'atendenteCalculadora',
+  };
+  const TARGET_TIPO_PEDIDO = 'desfiliado fora do processo';
+
+  /* ================= State ================= */
+  function emptyState(){
+    return { items:{}, lastImportAt:null, lastImportFile:null };
+  }
+  function defaultTracking(){
+    return { status:'pendente', atendente:'', dataTentativa:'', qtdTentativas:0, resultado:'', observacao:'', updatedAt:null, log:[] };
+  }
+
+  let state = emptyState();
+  let filters = { search:'', status:'all', atendente:'all', tab:'todos', dateFrom:'', dateTo:'' };
+  let activeMatricula = null;
+  let saveTimer = null;
+
+  /* ================= Helpers ================= */
+  function normalize(str){
+    return String(str == null ? '' : str)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .toLowerCase().trim().replace(/\s+/g,' ');
+  }
+  function toISODate(val){
+    if (!val) return null;
+    if (val instanceof Date) return val.toISOString().slice(0,10);
+    // string that already looks like a date (dd/mm/yyyy or yyyy-mm-dd)
+    const s = String(val).trim();
+    const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+    const iso = s.match(/^\d{4}-\d{2}-\d{2}/);
+    if (iso) return iso[0];
+    return null;
+  }
+  function formatDateDisplay(iso){
+    if (!iso) return '—';
+    const [y,m,d] = iso.split('-');
+    if (!y || !m || !d) return '—';
+    return `${d}/${m}/${y}`;
+  }
+  function todayISO(){
+    const d = new Date();
+    return d.toISOString().slice(0,10);
+  }
+  function escapeHtml(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  /* ================= Import ================= */
+  async function importWorkbook(file){
+    let buf;
+    try{ buf = await file.arrayBuffer(); }
+    catch(e){ showToast('Não foi possível ler o arquivo.'); return; }
+
+    let wb;
+    try{ wb = XLSX.read(buf, { type:'array', cellDates:true }); }
+    catch(e){ showToast('Arquivo inválido. Verifique se é um .xlsx exportado corretamente.'); return; }
+
+    const sheetName = wb.SheetNames.includes('Export') ? 'Export' : wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, raw:true, defval:null });
+    if (!rows || rows.length < 2){ showToast('Planilha vazia ou sem dados.'); return; }
+
+    const headers = rows[0].map(h => normalize(h));
+    let imported = 0, skippedNoMatricula = 0, ignoredOtherTipo = 0;
+
+    for (let i=1;i<rows.length;i++){
+      const row = rows[i];
+      if (!row || row.every(c => c===null || c==='')) continue;
+
+      const obj = {};
+      headers.forEach((h, idx) => {
+        const key = HEADER_MAP[h];
+        if (key) obj[key] = row[idx] !== undefined ? row[idx] : null;
+      });
+
+      if (normalize(obj.tipoPedido) !== TARGET_TIPO_PEDIDO){ ignoredOtherTipo++; continue; }
+
+      const matricula = obj.matricula == null ? '' : String(obj.matricula).trim();
+      if (!matricula){ skippedNoMatricula++; continue; }
+
+      ['dataCriacao','dataFinalizacao','dataDesfiliacao'].forEach(k => { obj[k] = toISODate(obj[k]); });
+
+      if (!state.items[matricula]) state.items[matricula] = {};
+      state.items[matricula].record = { ...obj, matricula, importedAt: new Date().toISOString() };
+      if (!state.items[matricula].tracking){
+        state.items[matricula].tracking = defaultTracking();
+      }
+      imported++;
+    }
+
+    state.lastImportAt = new Date().toISOString();
+    state.lastImportFile = file.name;
+    await persist();
+    renderAll();
+
+    const parts = [`${imported} matrícula(s) carregada(s) ou atualizada(s)`];
+    if (skippedNoMatricula) parts.push(`${skippedNoMatricula} linha(s) sem matrícula ignorada(s)`);
+    showToast(`Importação concluída: ${parts.join(', ')}.`);
+  }
+
+  async function persist(){
+    await Storage.set(STORAGE_KEY, JSON.stringify(state));
+  }
+  async function loadState(){
+    const raw = await Storage.get(STORAGE_KEY);
+    if (raw){
+      try{ state = JSON.parse(raw); if (!state.items) state.items = {}; }
+      catch(e){ state = emptyState(); }
+    } else {
+      state = emptyState();
+    }
+  }
+
+  /* ================= Derived data ================= */
+  function allEntries(){
+    return Object.keys(state.items).map(m => ({ matricula:m, record: state.items[m].record || {}, tracking: state.items[m].tracking || defaultTracking() }));
+  }
+  function bucketOf(statusKey){
+    const s = STATUS_BY_KEY[statusKey];
+    return s ? s.bucket : 'pendente';
+  }
+  function counts(){
+    const c = { total:0, pendente:0, andamento:0, finalizado:0 };
+    allEntries().forEach(e => {
+      c.total++;
+      c[bucketOf(e.tracking.status)]++;
+    });
+    return c;
+  }
+  function distinctAtendentes(){
+    const set = new Set();
+    allEntries().forEach(e => { if (e.tracking.atendente) set.add(e.tracking.atendente); });
+    return Array.from(set).sort((a,b) => a.localeCompare(b,'pt-BR'));
+  }
+  function filteredEntries(){
+    const search = normalize(filters.search);
+    return allEntries().filter(e => {
+      if (filters.tab !== 'todos' && bucketOf(e.tracking.status) !== filters.tab) return false;
+      if (filters.status !== 'all' && e.tracking.status !== filters.status) return false;
+      if (filters.atendente !== 'all' && (e.tracking.atendente || '') !== filters.atendente) return false;
+      if (search && !normalize(e.matricula).includes(search)) return false;
+      const d = e.record.dataDesfiliacao;
+      if (filters.dateFrom && (!d || d < filters.dateFrom)) return false;
+      if (filters.dateTo && (!d || d > filters.dateTo)) return false;
+      return true;
+    }).sort((a,b) => {
+      const order = { pendente:0, andamento:1, finalizado:2 };
+      const bd = order[bucketOf(a.tracking.status)] - order[bucketOf(b.tracking.status)];
+      if (bd !== 0) return bd;
+      const da = a.record.dataDesfiliacao || '9999-99-99';
+      const db = b.record.dataDesfiliacao || '9999-99-99';
+      if (da !== db) return da < db ? -1 : 1;
+      return a.matricula.localeCompare(b.matricula);
+    });
+  }
+
+  /* ================= Rendering ================= */
+  function renderMeta(){
+    const el = document.getElementById('meta-line');
+    if (!state.lastImportAt){
+      el.textContent = 'Nenhuma planilha importada ainda';
+      return;
+    }
+    const dt = new Date(state.lastImportAt);
+    const dstr = dt.toLocaleDateString('pt-BR') + ' às ' + dt.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    el.textContent = `Última importação: ${dstr} · ${state.lastImportFile || ''}`;
+  }
+
+  function renderStats(){
+    const c = counts();
+    const el = document.getElementById('stats');
+    const tiles = [
+      { label:'Total de matrículas', value:c.total, color:'var(--teal)' },
+      { label:'Não trabalhadas', value:c.pendente, color:'var(--st-pendente)' },
+      { label:'Em andamento', value:c.andamento, color:'var(--st-tentativa)' },
+      { label:'Finalizadas', value:c.finalizado, color:'var(--st-revertido)' },
+    ];
+    el.innerHTML = tiles.map(t => `
+      <div class="stat" style="--stat-color:${t.color}">
+        <div class="num">${t.value}</div>
+        <div class="label">${t.label}</div>
+      </div>
+    `).join('');
+  }
+
+  function renderTabs(){
+    const c = counts();
+    const map = { todos:c.total, pendente:c.pendente, andamento:c.andamento, finalizado:c.finalizado };
+    const el = document.getElementById('tabs');
+    el.innerHTML = TABS.map(t => `
+      <button class="tab ${filters.tab===t.key?'active':''}" data-tab="${t.key}">
+        ${t.label} <span class="count">${map[t.key]}</span>
+      </button>
+    `).join('');
+    el.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => { filters.tab = btn.dataset.tab; renderList(); renderTabs(); });
+    });
+  }
+
+  function renderFilterOptions(){
+    const statusSel = document.getElementById('f-status');
+    const current = filters.status;
+    statusSel.innerHTML = '<option value="all">Todos</option>' + STATUSES.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+    statusSel.value = current;
+
+    const atendSel = document.getElementById('f-atendente');
+    const currentAt = filters.atendente;
+    const atendentes = distinctAtendentes();
+    atendSel.innerHTML = '<option value="all">Todos</option>' + atendentes.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+    atendSel.value = atendentes.includes(currentAt) ? currentAt : 'all';
+    filters.atendente = atendSel.value;
+
+    const dl = document.getElementById('atendentes-list');
+    dl.innerHTML = atendentes.map(a => `<option value="${escapeHtml(a)}">`).join('');
+  }
+
+  function renderList(){
+    const el = document.getElementById('list');
+    const entries = filteredEntries();
+
+    if (allEntries().length === 0){
+      el.innerHTML = `
+        <div class="empty">
+          <h3>Nenhuma matrícula carregada</h3>
+          <p>Importe a planilha de desfiliações para começar a trabalhar a carteira de Retenção Ativa. A cada nova importação, os dados já registrados (status, atendente, tentativas) são preservados.</p>
+          <button class="btn btn-primary" id="empty-import-btn">Importar planilha</button>
+        </div>`;
+      const b = document.getElementById('empty-import-btn');
+      if (b) b.addEventListener('click', () => document.getElementById('file-input').click());
+      return;
+    }
+
+    if (entries.length === 0){
+      el.innerHTML = `<div class="no-results">Nenhuma matrícula encontrada com os filtros atuais.</div>`;
+      return;
+    }
+
+    el.innerHTML = entries.map(e => {
+      const st = STATUS_BY_KEY[e.tracking.status] || STATUS_BY_KEY.pendente;
+      const rec = e.record;
+      const attendantHtml = e.tracking.atendente
+        ? escapeHtml(e.tracking.atendente)
+        : '<span class="none">Sem atendente</span>';
+      return `
+        <div class="row" style="--row-color:${st.color}" data-matricula="${escapeHtml(e.matricula)}" tabindex="0" role="button">
+          <div class="matricula">${escapeHtml(e.matricula)}<small>${rec.idTicket ? 'Ticket ' + escapeHtml(rec.idTicket) : 'Sem ticket'}</small></div>
+          <div class="info">
+            <span><b>${formatDateDisplay(rec.dataDesfiliacao)}</b> desfiliação</span>
+            <span>${escapeHtml(rec.tipoDesfiliacao || '—')}</span>
+            <span>${escapeHtml(rec.franquia || '—')}</span>
+            ${e.tracking.qtdTentativas ? `<span>${e.tracking.qtdTentativas} tentativa(s)</span>` : ''}
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+            <span class="badge">${st.label}</span>
+            <span class="attendant">${attendantHtml}</span>
+          </div>
+          <div class="chev">&rsaquo;</div>
+        </div>`;
+    }).join('');
+
+    el.querySelectorAll('.row').forEach(row => {
+      const open = () => openDrawer(row.dataset.matricula);
+      row.addEventListener('click', open);
+      row.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } });
+    });
+  }
+
+  function renderAll(){
+    renderMeta();
+    renderStats();
+    renderTabs();
+    renderFilterOptions();
+    renderList();
+  }
+
+  /* ================= Drawer ================= */
+  function openDrawer(matricula){
+    const item = state.items[matricula];
+    if (!item) return;
+    activeMatricula = matricula;
+    const rec = item.record || {};
+    const trk = item.tracking || defaultTracking();
+
+    document.getElementById('d-matricula').textContent = matricula;
+    document.getElementById('d-sub').textContent = `${rec.franquia || '—'} · ${rec.regional || '—'}`;
+
+    document.getElementById('d-kv').innerHTML = `
+      <div class="item"><span class="k">ID do ticket</span><span class="v mono">${escapeHtml(rec.idTicket || '—')}</span></div>
+      <div class="item"><span class="k">Data da desfiliação</span><span class="v">${formatDateDisplay(rec.dataDesfiliacao)}</span></div>
+      <div class="item"><span class="k">Tipo de desfiliação</span><span class="v">${escapeHtml(rec.tipoDesfiliacao || '—')}</span></div>
+      <div class="item"><span class="k">Tipo de pedido</span><span class="v">${escapeHtml(rec.tipoPedido || '—')}</span></div>
+      <div class="item"><span class="k">Franquia</span><span class="v">${escapeHtml(rec.franquia || '—')}</span></div>
+      <div class="item"><span class="k">Regional</span><span class="v">${escapeHtml(rec.regional || '—')}</span></div>
+      <div class="item"><span class="k">Criação do ticket</span><span class="v">${formatDateDisplay(rec.dataCriacao)}</span></div>
+      <div class="item"><span class="k">Finalização do ticket</span><span class="v">${formatDateDisplay(rec.dataFinalizacao)}</span></div>
+    `;
+
+    document.getElementById('d-qa').innerHTML = QA_FIELDS.map(([key,label]) => {
+      const val = rec[key];
+      const norm = normalize(val);
+      const cls = norm === 'sim' ? 'sim' : (norm === 'nao' ? 'nao' : '');
+      return `<div class="item"><span>${label}</span><span class="flag ${cls}">${escapeHtml(val || '—')}</span></div>`;
+    }).join('');
+
+    const statusSel = document.getElementById('t-status');
+    statusSel.innerHTML = STATUSES.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+    statusSel.value = trk.status;
+
+    document.getElementById('t-atendente').value = trk.atendente || '';
+    document.getElementById('t-data-tentativa').value = trk.dataTentativa || '';
+    document.getElementById('t-qtd').value = trk.qtdTentativas || 0;
+    document.getElementById('t-resultado').value = trk.resultado || '';
+    document.getElementById('t-obs').value = trk.observacao || '';
+
+    const logWrap = document.getElementById('d-log-wrap');
+    const log = trk.log || [];
+    if (log.length){
+      logWrap.style.display = '';
+      document.getElementById('d-log').innerHTML = log.slice().reverse().map(l => `
+        <div class="log-item"><span class="dot"></span><span>${formatDateDisplay(l.date)}${l.nota ? ' — ' + escapeHtml(l.nota) : ''}</span></div>
+      `).join('');
+    } else {
+      logWrap.style.display = 'none';
+    }
+
+    setSaveState(trk.updatedAt ? `Salvo em ${new Date(trk.updatedAt).toLocaleString('pt-BR')}` : 'Ainda não salvo', !!trk.updatedAt);
+
+    document.getElementById('overlay').classList.add('open');
+    document.getElementById('drawer').classList.add('open');
+  }
+
+  function closeDrawer(){
+    document.getElementById('overlay').classList.remove('open');
+    document.getElementById('drawer').classList.remove('open');
+    activeMatricula = null;
+  }
+
+  function setSaveState(text, saved){
+    const el = document.getElementById('save-state');
+    el.textContent = text;
+    el.className = 'save-state' + (saved ? ' saved' : '');
+  }
+
+  async function saveTracking(showConfirmation){
+    if (!activeMatricula) return;
+    const item = state.items[activeMatricula];
+    if (!item) return;
+
+    const trk = item.tracking || defaultTracking();
+    trk.status = document.getElementById('t-status').value;
+    trk.atendente = document.getElementById('t-atendente').value.trim();
+    trk.dataTentativa = document.getElementById('t-data-tentativa').value || '';
+    trk.qtdTentativas = Math.max(0, parseInt(document.getElementById('t-qtd').value, 10) || 0);
+    trk.resultado = document.getElementById('t-resultado').value.trim();
+    trk.observacao = document.getElementById('t-obs').value.trim();
+    trk.updatedAt = new Date().toISOString();
+    item.tracking = trk;
+
+    await persist();
+    setSaveState(`Salvo em ${new Date(trk.updatedAt).toLocaleString('pt-BR')}`, true);
+    renderStats(); renderTabs(); renderFilterOptions(); renderList();
+    if (showConfirmation) showToast('Tratativa salva.');
+  }
+
+  function scheduleAutosave(){
+    clearTimeout(saveTimer);
+    setSaveState('Salvando...', false);
+    saveTimer = setTimeout(() => saveTracking(false), 500);
+  }
+
+  function logAttemptToday(){
+    if (!activeMatricula) return;
+    const qtdInput = document.getElementById('t-qtd');
+    qtdInput.value = (parseInt(qtdInput.value, 10) || 0) + 1;
+    document.getElementById('t-data-tentativa').value = todayISO();
+    const item = state.items[activeMatricula];
+    if (!item.tracking.log) item.tracking.log = [];
+    item.tracking.log.push({ date: todayISO(), nota: document.getElementById('t-resultado').value.trim() || '' });
+    if (item.tracking.status === 'pendente'){
+      document.getElementById('t-status').value = 'em_tentativa';
+    }
+    scheduleAutosave();
+  }
+
+  /* ================= CSV export ================= */
+  function exportCsv(){
+    const rows = [[
+      'Matricula','Franquia','Regional','ID Ticket','Data Desfiliacao','Tipo Desfiliacao',
+      'Status','Atendente','Data Tentativa','Qtd Tentativas','Resultado do Contato','Observacao'
+    ]];
+    filteredEntries().forEach(e => {
+      const st = STATUS_BY_KEY[e.tracking.status] || STATUS_BY_KEY.pendente;
+      rows.push([
+        e.matricula, e.record.franquia || '', e.record.regional || '', e.record.idTicket || '',
+        formatDateDisplay(e.record.dataDesfiliacao), e.record.tipoDesfiliacao || '',
+        st.label, e.tracking.atendente || '', formatDateDisplay(e.tracking.dataTentativa),
+        e.tracking.qtdTentativas || 0, e.tracking.resultado || '', (e.tracking.observacao || '').replace(/\n/g,' ')
+      ]);
+    });
+    const csv = rows.map(r => r.map(v => {
+      const s = String(v == null ? '' : v);
+      return /[",;\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+    }).join(';')).join('\r\n');
+    const blob = new Blob(['\ufeff' + csv], { type:'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `retencao_ativa_${todayISO()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /* ================= Toast ================= */
+  let toastTimer = null;
+  function showToast(msg){
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+  }
+
+  /* ================= Event wiring ================= */
+  function wireEvents(){
+    document.getElementById('btn-import-trigger').addEventListener('click', () => document.getElementById('file-input').click());
+    document.getElementById('file-input').addEventListener('change', async (ev) => {
+      const file = ev.target.files[0];
+      if (file) await importWorkbook(file);
+      ev.target.value = '';
+    });
+    document.getElementById('btn-export').addEventListener('click', exportCsv);
+
+    document.getElementById('f-search').addEventListener('input', ev => { filters.search = ev.target.value; renderList(); });
+    document.getElementById('f-status').addEventListener('change', ev => { filters.status = ev.target.value; renderList(); });
+    document.getElementById('f-atendente').addEventListener('change', ev => { filters.atendente = ev.target.value; renderList(); });
+    document.getElementById('f-date-from').addEventListener('change', ev => { filters.dateFrom = ev.target.value; renderList(); });
+    document.getElementById('f-date-to').addEventListener('change', ev => { filters.dateTo = ev.target.value; renderList(); });
+    document.getElementById('btn-clear-filters').addEventListener('click', () => {
+      filters = { search:'', status:'all', atendente:'all', tab: filters.tab, dateFrom:'', dateTo:'' };
+      document.getElementById('f-search').value = '';
+      document.getElementById('f-date-from').value = '';
+      document.getElementById('f-date-to').value = '';
+      renderFilterOptions();
+      renderList();
+    });
+
+    document.getElementById('overlay').addEventListener('click', closeDrawer);
+    document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeDrawer(); });
+
+    ['t-status','t-atendente','t-data-tentativa','t-qtd','t-resultado','t-obs'].forEach(id => {
+      const el = document.getElementById(id);
+      const evName = (el.tagName === 'SELECT') ? 'change' : 'input';
+      el.addEventListener(evName, scheduleAutosave);
+    });
+    document.getElementById('btn-save').addEventListener('click', () => saveTracking(true));
+    document.getElementById('btn-log-attempt').addEventListener('click', logAttemptToday);
+    document.getElementById('qtd-plus').addEventListener('click', () => {
+      const el = document.getElementById('t-qtd');
+      el.value = (parseInt(el.value,10) || 0) + 1;
+      scheduleAutosave();
+    });
+    document.getElementById('qtd-minus').addEventListener('click', () => {
+      const el = document.getElementById('t-qtd');
+      el.value = Math.max(0, (parseInt(el.value,10) || 0) - 1);
+      scheduleAutosave();
+    });
+  }
+
+  /* ================= Init ================= */
+  async function init(){
+    wireEvents();
+    await loadState();
+    renderAll();
+  }
+  init();
+
+})();
+</script>
+</body>
+</html>
